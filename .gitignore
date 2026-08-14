@@ -1,0 +1,13 @@
+*.sfc
+*.smc
+*.srm
+
+build/
+release/
+__pycache__/
+
+tools/asar
+tools/asar.exe
+tools/flips
+tools/flips.exe
+tools/*.so
