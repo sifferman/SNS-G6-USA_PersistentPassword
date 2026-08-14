@@ -6,6 +6,9 @@ ROM cannot live in the repository. This compresses it, encodes it, splits it
 into pieces small enough to be repository secrets, and writes each to
 build/base_rom_secrets/ ready to upload.
 
+A secret is capped at 64 kilobytes after GitHub encrypts and encodes it, which
+inflates the value by about a third, so the slices are sized well under that.
+
 Run once. The workflow rebuilds the ROM with assemble_rom_from_secrets.py.
 """
 import base64
