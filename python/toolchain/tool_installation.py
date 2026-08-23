@@ -3,7 +3,6 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 import tempfile
 import urllib.request
 import zipfile
@@ -13,7 +12,6 @@ from toolchain.build_environment import (
     ASSEMBLER_RELEASE_TAG,
     ASSEMBLER_SOURCE_SUBDIRECTORY,
     BUILT_ASSEMBLER_PATH_WITHIN_BUILD_DIRECTORY,
-    DOWNLOADED_TOOLS_DIRECTORY,
     PATCH_CREATOR_RELEASE_TAG,
     assembler_executable,
     assembler_has_a_prebuilt_release,
@@ -51,7 +49,7 @@ def run_command(command: list, failure_message: str) -> None:
         raise SystemExit(failure_message)
 
 
-def build_assembler_from_source() -> None:
+def build_assembler_from_source(tools_directory: Path) -> None:
     missing = [name for name in COMMANDS_NEEDED_TO_BUILD_THE_ASSEMBLER
                if shutil.which(name) is None]
     if missing:
@@ -74,27 +72,31 @@ def build_assembler_from_source() -> None:
         built = build / BUILT_ASSEMBLER_PATH_WITHIN_BUILD_DIRECTORY
         if not built.is_file():
             raise SystemExit(f"the assembler build produced no binary at {built}")
-        DOWNLOADED_TOOLS_DIRECTORY.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(built, assembler_executable())
-    assembler_executable().chmod(assembler_executable().stat().st_mode | stat.S_IXUSR)
+        tools_directory.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(built, assembler_executable(tools_directory))
+    installed_assembler = assembler_executable(tools_directory)
+    installed_assembler.chmod(installed_assembler.stat().st_mode | stat.S_IXUSR)
 
 
-def install_assembler() -> None:
+def install_assembler(tools_directory: Path) -> None:
     if assembler_has_a_prebuilt_release():
         print(f"Downloading assembler {ASSEMBLER_RELEASE_TAG}...")
-        extract_from_zip_archive(assembler_prebuilt_download_url(), assembler_executable())
+        extract_from_zip_archive(assembler_prebuilt_download_url(),
+                                 assembler_executable(tools_directory))
     else:
         print(f"Building assembler {ASSEMBLER_RELEASE_TAG} from source...")
-        build_assembler_from_source()
+        build_assembler_from_source(tools_directory)
 
 
-def install_patch_creator() -> None:
+def install_patch_creator(tools_directory: Path) -> None:
     print(f"Downloading patch creator {PATCH_CREATOR_RELEASE_TAG}...")
-    extract_from_zip_archive(patch_creator_download_url(), patch_creator_executable())
+    extract_from_zip_archive(patch_creator_download_url(),
+                             patch_creator_executable(tools_directory))
 
 
-def install_emulator_core() -> None:
-    extract_from_zip_archive(emulator_core_download_url(), emulator_core_file())
+def install_emulator_core(tools_directory: Path) -> None:
+    extract_from_zip_archive(emulator_core_download_url(),
+                             emulator_core_file(tools_directory))
 
 
 def installed_version_of(executable_file: Path) -> str:

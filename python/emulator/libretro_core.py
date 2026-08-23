@@ -1,4 +1,5 @@
 import ctypes
+from dataclasses import dataclass
 from pathlib import Path
 
 WORK_RAM_FIRST_ADDRESS = 0x7E0000
@@ -10,6 +11,25 @@ ENVIRONMENT_GET_CAN_DUPE = 3
 ENVIRONMENT_GET_SYSTEM_DIRECTORY = 9
 ENVIRONMENT_SET_PIXEL_FORMAT = 10
 ENVIRONMENT_GET_SAVE_DIRECTORY = 31
+
+LIBRETRO_BUTTON_BY_NAME = {
+    "B": 0,
+    "Y": 1,
+    "SELECT": 2,
+    "START": 3,
+    "UP": 4,
+    "DOWN": 5,
+    "LEFT": 6,
+    "RIGHT": 7,
+    "A": 8,
+    "X": 9,
+    "L": 10,
+    "R": 11,
+}
+
+LIBRETRO_PIXEL_FORMAT_0RGB1555 = 0
+LIBRETRO_PIXEL_FORMAT_XRGB8888 = 1
+LIBRETRO_PIXEL_FORMAT_RGB565 = 2
 
 environment_callback_type = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_uint, ctypes.c_void_p)
 video_refresh_callback_type = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_uint,
@@ -23,6 +43,15 @@ input_state_callback_type = ctypes.CFUNCTYPE(ctypes.c_int16, ctypes.c_uint, ctyp
                                              ctypes.c_uint, ctypes.c_uint)
 
 
+@dataclass(frozen=True)
+class CapturedFrame:
+    pixels: bytes
+    width: int
+    height: int
+    declared_libretro_pixel_format: int
+    bytes_per_pixel: int
+
+
 class GameInfo(ctypes.Structure):
     _fields_ = [("path", ctypes.c_char_p),
                 ("data", ctypes.c_void_p),
@@ -31,17 +60,19 @@ class GameInfo(ctypes.Structure):
 
 
 class LibretroCore:
-    def __init__(self, core_file: Path, temporary_directory: Path):
+    def __init__(self, core_file: Path, temporary_directory: Path, video_recording=None):
         self.library = ctypes.CDLL(str(core_file))
         self.library.retro_get_memory_data.restype = ctypes.c_void_p
         self.library.retro_get_memory_size.restype = ctypes.c_size_t
         self.library.retro_load_game.restype = ctypes.c_bool
 
         self.held_buttons = frozenset()
+        self.video_recording = video_recording
+        self.libretro_pixel_format = LIBRETRO_PIXEL_FORMAT_0RGB1555
         self.temporary_directory = ctypes.c_char_p(str(temporary_directory).encode())
         self.retained_callbacks = [
             environment_callback_type(self.on_environment),
-            video_refresh_callback_type(lambda *arguments: None),
+            video_refresh_callback_type(self.on_video_refresh),
             audio_sample_callback_type(lambda *arguments: None),
             audio_sample_batch_callback_type(lambda samples, frame_count: frame_count),
             input_poll_callback_type(lambda: None),
@@ -58,6 +89,7 @@ class LibretroCore:
 
     def on_environment(self, command: int, data: int) -> bool:
         if command == ENVIRONMENT_SET_PIXEL_FORMAT:
+            self.libretro_pixel_format = ctypes.cast(data, ctypes.POINTER(ctypes.c_uint))[0]
             return True
         if command in (ENVIRONMENT_GET_SYSTEM_DIRECTORY, ENVIRONMENT_GET_SAVE_DIRECTORY):
             ctypes.cast(data, ctypes.POINTER(ctypes.c_char_p))[0] = self.temporary_directory
@@ -67,8 +99,29 @@ class LibretroCore:
             return True
         return False
 
+    def on_video_refresh(self, frame_pointer: int, width: int, height: int,
+                         pitch_in_bytes: int) -> None:
+        if self.video_recording is None:
+            return
+        if not frame_pointer:
+            self.video_recording.repeat_previous_frame(self.held_buttons)
+            return
+        bytes_per_pixel = pitch_in_bytes // width
+        padded_rows = ctypes.string_at(frame_pointer, pitch_in_bytes * height)
+        visible_pixels = b"".join(
+            padded_rows[row * pitch_in_bytes:row * pitch_in_bytes + width * bytes_per_pixel]
+            for row in range(height))
+        self.video_recording.write_frame(
+            CapturedFrame(visible_pixels, width, height, self.libretro_pixel_format,
+                          bytes_per_pixel),
+            self.held_buttons)
+
     def on_input_state(self, port: int, device: int, index: int, button: int) -> int:
         return 1 if port == 0 and button in self.held_buttons else 0
+
+    def announce_check(self, check_name: str) -> None:
+        if self.video_recording is not None:
+            self.video_recording.announce_check(check_name)
 
     def load_rom(self, rom_file: Path) -> None:
         rom_bytes = rom_file.read_bytes()
@@ -78,6 +131,8 @@ class LibretroCore:
                              size=len(rom_bytes), meta=None)
         if not self.library.retro_load_game(ctypes.byref(game_info)):
             raise SystemExit(f"the emulator core refused to load {rom_file}")
+        if self.video_recording is not None:
+            self.video_recording.announce_hard_reset()
 
     def unload_rom(self) -> None:
         self.library.retro_unload_game()

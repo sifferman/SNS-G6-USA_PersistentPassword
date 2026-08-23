@@ -2,12 +2,10 @@ import platform
 from pathlib import Path
 
 PATCH_NAME = "SNS-G6-USA_PersistentPassword"
-BASE_ROM_MD5_CHECKSUM = "bb6a1198e291c8ae58e9581a4296ed4d"
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIRECTORY = REPOSITORY_ROOT / "build"
 RELEASE_DIRECTORY = REPOSITORY_ROOT / "release"
-DOWNLOADED_TOOLS_DIRECTORY = REPOSITORY_ROOT / "tools"
 INPUT_RECORDING_DIRECTORY = REPOSITORY_ROOT / "input_recordings"
 
 MAIN_SOURCE_FILE = REPOSITORY_ROOT / "asm" / "apply_persistent_password_patch.asm"
@@ -35,16 +33,16 @@ OPERATING_SYSTEM = platform.system()
 EXECUTABLE_FILE_EXTENSION = ".exe" if OPERATING_SYSTEM == "Windows" else ""
 
 
-def assembler_executable() -> Path:
-    return DOWNLOADED_TOOLS_DIRECTORY / f"asar{EXECUTABLE_FILE_EXTENSION}"
+def assembler_executable(tools_directory: Path) -> Path:
+    return tools_directory / f"asar{EXECUTABLE_FILE_EXTENSION}"
 
 
-def patch_creator_executable() -> Path:
-    return DOWNLOADED_TOOLS_DIRECTORY / f"flips{EXECUTABLE_FILE_EXTENSION}"
+def patch_creator_executable(tools_directory: Path) -> Path:
+    return tools_directory / f"flips{EXECUTABLE_FILE_EXTENSION}"
 
 
-def emulator_core_file() -> Path:
-    return DOWNLOADED_TOOLS_DIRECTORY / EMULATOR_CORE_NAME
+def emulator_core_file(tools_directory: Path) -> Path:
+    return tools_directory / EMULATOR_CORE_NAME
 
 
 def assembler_has_a_prebuilt_release() -> bool:

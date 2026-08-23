@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""usage: verify_patch_in_emulator.py <path to "Goof Troop (USA).sfc">
-
-Boots the patched ROM in a headless emulator and reads work RAM and save RAM
+"""Boots the patched ROM in a headless emulator and reads work RAM and save RAM
 back, to prove the patch behaves rather than only that it assembled. Needs the
 base ROM as well, for the vanilla defaults and password table the expected
 values are read from. Linux only.
@@ -10,7 +8,6 @@ Covers a fresh boot with no save file, a cold boot with a saved game, and
 replays of the recordings in input_recordings/ that change a setting and
 complete a level, each followed by a power cycle.
 """
-import os
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -27,9 +24,12 @@ from toolchain.build_environment import (
     PATCHED_ROM_FILE,
     emulator_core_file,
 )
+from toolchain.command_line import (
+    argument_parser_needing_the_tools_directory_and_base_rom,
+    base_rom_file_from,
+)
 from toolchain.tool_installation import install_emulator_core
 
-BASE_ROM_ENVIRONMENT_VARIABLE = "GOOF_TROOP_USA_ROM"
 BLANK_SAVE_RAM = b""
 SEEDED_FURTHEST_LEVEL = 3
 COMPLETED_LEVEL = 1
@@ -176,6 +176,7 @@ def run_and_report(core: LibretroCore, base_rom: bytes) -> int:
     failures = 0
     for section_name, run_section in EMULATOR_CHECKS:
         print(section_name)
+        core.announce_check(section_name)
         for result in run_section(core, base_rom):
             failures += not result.passed
             detail = f"  {result.detail}" if result.detail else ""
@@ -186,25 +187,40 @@ def run_and_report(core: LibretroCore, base_rom: bytes) -> int:
     return 1 if failures else 0
 
 
-def main() -> int:
-    given_path = (sys.argv[1] if len(sys.argv) > 1
-                  else os.environ.get(BASE_ROM_ENVIRONMENT_VARIABLE, ""))
-    if not given_path:
-        raise SystemExit(__doc__)
-    base_rom_file = Path(given_path)
-    if not base_rom_file.is_file():
-        raise SystemExit(f"no such file: {base_rom_file}")
-    if not PATCHED_ROM_FILE.is_file():
-        raise SystemExit(f"{PATCHED_ROM_FILE} is missing -- run python/build_patch.py first")
-    if not emulator_core_file().is_file():
-        print("Downloading emulator core...")
-        install_emulator_core()
+def parsed_arguments():
+    parser = argument_parser_needing_the_tools_directory_and_base_rom(__doc__)
+    parser.add_argument("--video-file", type=Path, default=None,
+                        help="record everything the emulator draws into this .mkv, "
+                             "which needs ffmpeg")
+    return parser.parse_args()
 
+
+def started_video_recording(video_file: Path):
+    if video_file is None:
+        return None
+    from emulator.video_recording import VideoRecording
+    return VideoRecording(video_file)
+
+
+def main() -> int:
+    arguments = parsed_arguments()
+    base_rom_file = base_rom_file_from(arguments.base_rom)
+    if not PATCHED_ROM_FILE.is_file():
+        raise SystemExit(f"{PATCHED_ROM_FILE} is missing -- run python/build_patch.py "
+                         f"{arguments.tools_directory} first")
+    if not emulator_core_file(arguments.tools_directory).is_file():
+        print("Downloading emulator core...")
+        install_emulator_core(arguments.tools_directory)
+
+    video_recording = started_video_recording(arguments.video_file)
     with tempfile.TemporaryDirectory() as temporary_directory:
-        core = LibretroCore(emulator_core_file(), Path(temporary_directory))
+        core = LibretroCore(emulator_core_file(arguments.tools_directory),
+                            Path(temporary_directory), video_recording)
         print(f"Booting {PATCHED_ROM_FILE.name}...\n")
         exit_code = run_and_report(core, base_rom_file.read_bytes())
         core.shut_down()
+    if video_recording:
+        video_recording.finish()
     return exit_code
 
 

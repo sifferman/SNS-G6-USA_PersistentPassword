@@ -2,22 +2,16 @@ import re
 import zipfile
 from pathlib import Path
 
+from emulator.libretro_core import LIBRETRO_BUTTON_BY_NAME
+
 INPUT_LOG_MEMBER_NAME = "Input Log.txt"
 LOG_KEY_PREFIX = "LogKey:"
 
+RECORDED_NAME_PREFIX = "P1 "
+
 LIBRETRO_BUTTON_BY_RECORDED_NAME = {
-    "P1 B": 0,
-    "P1 Y": 1,
-    "P1 Select": 2,
-    "P1 Start": 3,
-    "P1 Up": 4,
-    "P1 Down": 5,
-    "P1 Left": 6,
-    "P1 Right": 7,
-    "P1 A": 8,
-    "P1 X": 9,
-    "P1 L": 10,
-    "P1 R": 11,
+    f"{RECORDED_NAME_PREFIX}{name.capitalize()}": button
+    for name, button in LIBRETRO_BUTTON_BY_NAME.items()
 }
 
 

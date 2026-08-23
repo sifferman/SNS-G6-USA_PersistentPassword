@@ -30,12 +30,13 @@ def write_memory_map_include() -> None:
         encoding="utf-8")
 
 
-def assemble_into(target_rom_file: Path) -> None:
-    if not assembler_executable().exists():
-        raise SystemExit("build tools missing -- run python/download_build_tools.py first")
+def assemble_into(target_rom_file: Path, tools_directory: Path) -> None:
+    if not assembler_executable(tools_directory).exists():
+        raise SystemExit(f"the assembler is missing from {tools_directory} -- run "
+                         f"python/download_build_tools.py {tools_directory} first")
     write_memory_map_include()
     completed = subprocess.run(
-        [str(assembler_executable()), "--fix-checksum=on", f"-I{BUILD_DIRECTORY}",
+        [str(assembler_executable(tools_directory)), "--fix-checksum=on", f"-I{BUILD_DIRECTORY}",
          str(MAIN_SOURCE_FILE), str(target_rom_file)])
     if completed.returncode != 0:
         raise SystemExit("assembly failed")

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""usage: split_rom_into_secrets.py <path to "Goof Troop (USA).sfc">
+"""Prepares the base ROM for continuous integration, which cannot keep it in the repository.
 
-Continuous integration needs the base ROM to build and boot the patch, and the
-ROM cannot live in the repository. This compresses it, encodes it, splits it
-into pieces small enough to be repository secrets, and writes each to
-build/base_rom_secrets/ ready to upload.
+Compresses the ROM, encodes it, splits it into pieces small enough to be
+repository secrets, writes each to build/base_rom_secrets/, and prints the
+commands that upload them.
 
 A secret is capped at 64 kilobytes after GitHub encrypts and encodes it, which
 inflates the value by about a third, so the slices are sized well under that.
@@ -13,29 +12,26 @@ Run once. The workflow rebuilds the ROM with assemble_rom_from_secrets.py.
 """
 import base64
 import gzip
-import hashlib
 import sys
-from pathlib import Path
 
+from goof_troop_usa.base_rom import (
+    A_COPIER_HEADER_IS_THE_USUAL_CAUSE,
+    require_headerless_base_rom,
+)
 from toolchain.build_environment import (
-    BASE_ROM_MD5_CHECKSUM,
     BUILD_DIRECTORY,
     SECRET_NAME_PREFIX,
     SECRET_SLICE_SIZE_IN_CHARACTERS,
 )
+from toolchain.command_line import argument_parser_needing_the_base_rom, base_rom_file_from
 
 SECRET_SLICE_DIRECTORY = BUILD_DIRECTORY / "base_rom_secrets"
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit(__doc__)
-    rom_bytes = Path(sys.argv[1]).read_bytes()
-    actual = hashlib.md5(rom_bytes).hexdigest()
-    if actual != BASE_ROM_MD5_CHECKSUM:
-        raise SystemExit(f"base ROM is not headerless Goof Troop (USA).\n"
-                         f"  expected md5 {BASE_ROM_MD5_CHECKSUM}\n"
-                         f"  actual   md5 {actual}")
+    arguments = argument_parser_needing_the_base_rom(__doc__).parse_args()
+    rom_bytes = base_rom_file_from(arguments.base_rom).read_bytes()
+    require_headerless_base_rom(rom_bytes, A_COPIER_HEADER_IS_THE_USUAL_CAUSE)
 
     encoded = base64.b64encode(gzip.compress(rom_bytes, 9)).decode("ascii")
     slices = [encoded[start:start + SECRET_SLICE_SIZE_IN_CHARACTERS]
