@@ -105,6 +105,6 @@ written from scratch.
 
 ### Goof Troop SRAM
 
-*Goof Troop SRAM* (2022) by BillyTime! Games found that the copy protection
-routine must be removed before save RAM can be added. This patch follows that
-research.
+*Goof Troop SRAM* (2022) by BillyTime! Games (<https://romhackplaza.org/romhacks/goof-troop-sram-super-nintendo>)
+found that the copy protection routine must be removed before save RAM can be added.
+This patch builds upon research.
