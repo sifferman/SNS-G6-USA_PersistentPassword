@@ -11,7 +11,8 @@ block of work RAM at `$7F:FF00`. The patch declares 2 KB of battery
 backed save RAM in the cartridge header, copies that block out of save RAM
 (`$70:0000`) on boot, and copies it back on a level cleared, a password
 accepted, or a setting changed. There is a piracy protection routine at
-`$80:F2A9`, which hangs is save RAM is writable, so it is removed.
+`$80:F2A9`, which hangs if save RAM is writable, so it is removed. The routines
+fit free space at `$8B:FF00`; the ROM stays 512 KB.
 
 Details: `asm/` and `python/goof_troop_usa/memory_map.py`.
 

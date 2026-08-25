@@ -13,9 +13,6 @@ incsrc "goof_troop_usa_memory_map.asm"
 org !CARTRIDGE_TYPE_HEADER_FIELD
     db !CARTRIDGE_TYPE_ROM_WITH_BATTERY_BACKED_SAVE_RAM
 
-org !ROM_SIZE_HEADER_FIELD
-    db !ROM_SIZE_1024_KILOBYTES
-
 org !SAVE_RAM_SIZE_HEADER_FIELD
     db !SAVE_RAM_SIZE_TWO_KILOBYTES
 
@@ -39,12 +36,7 @@ fill !SAVE_RAM_DETECTION_ROUTINE_LAST_ADDRESS-pc()+1
 assert pc() == !SAVE_RAM_DETECTION_ROUTINE_LAST_ADDRESS+1, "the save RAM detection routine must be overwritten in full, so that none of its instructions survive"
 
 
-org !PATCH_CODE_BANK_ADDRESS
-
-PreserveVanillaJumpIntoTheAddedBank:
-    JML !RESET_ENTRY_POINT
-
-assert PreserveVanillaJumpIntoTheAddedBank == !PATCH_CODE_BANK_ADDRESS, "vanilla jumps into the first address of the added bank, so this trampoline must stay first in it or that jump lands inside another routine"
+org !FREE_SPACE_IN_ROM
 
 CopySettingsBlockToSaveRam:
     PHB
@@ -66,9 +58,7 @@ SaveSettingsThenReloadThem:
     JSL CopySettingsBlockToSaveRam
     JML !RELOAD_SETTINGS_ROUTINE
 
-
-org !LAST_ADDRESS_OF_EXPANDED_ROM
-    db $00
+assert pc() <= !FREE_SPACE_IN_ROM+!FREE_SPACE_SIZE_IN_BYTES, "these routines must fit in the free space at the end of bank $8B, so that the ROM does not have to grow"
 
 
 org !STORE_FURTHEST_LEVEL_REACHED_ON_LEVEL_CLEARED

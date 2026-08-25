@@ -154,11 +154,24 @@ initialisation entirely, so `RestoreSettingsFromSaveRamOnBoot` re-clears it
 after the copy. It exploits `MVN` leaving DB set to the destination bank, so a
 3-byte `STZ.w $FF08` suffices.
 
-### Expanding the ROM woke a dormant jump
+### The ROM must not grow
 
-Hooking the option writes needs more than the 42 freed bytes, so the ROM is
-expanded to one megabyte and everything except the boot loader lives in the
-added bank. Vanilla contains a long jump into that bank:
+Hooking the option writes needs more than the 42 freed bytes, so the rest of
+the patch lives in the 256 bytes of free space the disassembly declares at the
+end of bank `$8B`:
+
+```asm
+DATA_8BFE00:
+	incbin "Palettes/Sprite_Ending.bin"
+
+	%FREE_BYTES($8BFF00, 256, $00)
+```
+
+That region is zero in the base ROM, which `build_patch.py` checks before it
+assembles. The routines need 35 of the 256 bytes.
+
+Expanding the ROM instead would be the obvious move, and it is a trap. Vanilla
+contains a long jump into a bank that does not exist yet:
 
 ```asm
 DATA_8081E3:
@@ -168,28 +181,27 @@ CODE_80821B:                ; Note: The ROM is only 512KB large, so this just le
 	JML.l $908000
 ```
 
-At 512 KB, bank `$90` mirrored to offset 0 and this behaved as a jump to the
-reset entry. At one megabyte `$90:8000` is real memory, and the first routine
-placed there would be entered mid-flight by any dispatch through entry 8, then
-`RTL` on a frame that was never a `JSL`.
-
-`PreserveVanillaJumpIntoTheAddedBank` sits at `$90:8000` and does nothing but
-`JML $808000`, reproducing vanilla exactly. Found by the entry-point scan, not
-by inspection.
+At 512 KB, bank `$90` mirrors to offset 0, so that jump reaches the reset
+entry. Expand to one megabyte and `$90:8000` becomes real memory: anything
+placed there is entered mid-flight by any dispatch through entry 8, then `RTL`
+on a frame that was never a `JSL`. An earlier version of this patch did expand,
+and needed a `JML $808000` trampoline at `$90:8000` to reproduce the mirror.
+Staying at 512 KB removes the hazard rather than working around it, so
+`build_patch.py` fails if the assembled ROM is not exactly the size of the base
+ROM. Found by the entry-point scan, not by inspection.
 
 ### Layout
 
 | address | routine |
 |---|---|
 | `$80:F2A9` | `RestoreSettingsFromSaveRamOnBoot`, then `$EA` filler to `$80:F2D2` |
-| `$90:8000` | `PreserveVanillaJumpIntoTheAddedBank` |
-| `$90:8004` | `CopySettingsBlockToSaveRam` |
-| `$90:8017` | `RecordFurthestLevelReachedToSaveRam` |
-| `$90:801F` | `SaveSettingsThenReloadThem` |
+| `$8B:FF00` | `CopySettingsBlockToSaveRam` |
+| `$8B:FF13` | `RecordFurthestLevelReachedToSaveRam` |
+| `$8B:FF1B` | `SaveSettingsThenReloadThem` |
 
 The boot loader stays in bank `$80` because the reset handler reaches it with a
-near `JSR`, which cannot cross banks. The added half is zeros, so the patch
-grows only to 162 bytes and a compressed ROM is unchanged in size.
+near `JSR`, which cannot cross banks. 97 bytes of the ROM change, its size does
+not, and the patch is 155 bytes.
 
 ---
 

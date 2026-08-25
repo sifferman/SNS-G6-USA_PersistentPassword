@@ -16,6 +16,7 @@ from pathlib import Path
 from emulator.input_recording import held_buttons_per_frame
 from emulator.libretro_core import LibretroCore
 from goof_troop_usa import memory_map
+from goof_troop_usa.base_rom import rom_bytes_at
 from toolchain.build_environment import (
     CHEATS_HELD_DURING_THE_LEVEL_RECORDING,
     COLD_BOOT_TO_CHANGE_SETTINGS_RECORDING,
@@ -34,7 +35,6 @@ BLANK_SAVE_RAM = b""
 SEEDED_FURTHEST_LEVEL = 3
 COMPLETED_LEVEL = 1
 NO_CHEATS = {}
-LOW_ROM_BANK_SIZE_IN_BYTES = 0x8000
 
 
 @dataclass(frozen=True)
@@ -44,26 +44,20 @@ class CheckResult:
     detail: str = ""
 
 
-def read_rom_bytes_at(rom: bytes, snes_address: int, length: int) -> bytes:
-    start = (((snes_address >> 16) & 0x7F) * LOW_ROM_BANK_SIZE_IN_BYTES
-             + (snes_address & 0xFFFF) - 0x8000)
-    return rom[start:start + length]
-
-
 def offset_in_block(work_ram_address: int) -> int:
     return work_ram_address - memory_map.SETTINGS_BLOCK_IN_WORK_RAM
 
 
 def password_symbols_for_level(base_rom: bytes, level: int) -> bytes:
-    return read_rom_bytes_at(
+    return rom_bytes_at(
         base_rom,
         memory_map.PASSWORD_TABLE_IN_ROM + level * memory_map.PASSWORD_SYMBOLS_PER_LEVEL,
         memory_map.PASSWORD_SYMBOLS_PER_LEVEL)
 
 
 def settings_block_saved_at_level(base_rom: bytes, level: int) -> bytes:
-    block = bytearray(read_rom_bytes_at(base_rom, memory_map.DEFAULT_SETTINGS_BLOCK_IN_ROM,
-                                        memory_map.SETTINGS_BLOCK_SIZE_IN_BYTES))
+    block = bytearray(rom_bytes_at(base_rom, memory_map.DEFAULT_SETTINGS_BLOCK_IN_ROM,
+                                   memory_map.SETTINGS_BLOCK_SIZE_IN_BYTES))
     block[offset_in_block(memory_map.FURTHEST_LEVEL_REACHED_IN_WORK_RAM)] = level
     return bytes(block)
 
